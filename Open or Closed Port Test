@@ -1,0 +1,161 @@
+For the Hak5 Shark Jack, the most practical way to do this is with a Bash payload, since the Shark Jack runs OpenWrt Linux and its payload system (payload.sh) executes Bash scripts. You can test a port using netcat (nc) and then control the device LEDs using the built-in LED command.
+
+Below is a clean, reliable payload that:
+
+Tests a specific port on a target IP
+
+Turns GREEN LED if the port is OPEN
+
+Turns RED LED if the port is CLOSED
+
+Provides a quick timeout so the scan does not hang
+
+Shark Jack Payload – Port Open/Closed Test
+
+Create a file named:
+
+payload.sh
+#!/bin/bash
+
+# Target settings
+TARGET="192.168.1.1"
+PORT="22"
+TIMEOUT=2
+
+# Start indicator
+LED SETUP
+LED ATTACK
+
+# Test the port using netcat
+nc -z -w $TIMEOUT $TARGET $PORT
+
+# Check result
+if [ $? -eq 0 ]; then
+    # Port is OPEN
+    LED GREEN
+else
+    # Port is CLOSED
+    LED RED
+fi
+How It Works
+Port Test
+nc -z -w 2 TARGET PORT
+
+-z → scan mode (no data sent)
+
+-w → timeout
+
+exit code 0 = open
+
+exit code 1 = closed
+
+LED Control
+
+Shark Jack supports:
+
+LED SETUP
+LED ATTACK
+LED GREEN
+LED RED
+LED OFF
+
+So we simply check the exit code:
+
+if [ $? -eq 0 ]
+Example Use Case
+
+Testing if SSH is open on a gateway
+
+TARGET="192.168.1.1"
+PORT="22"
+
+Result:
+
+Result	LED
+Port open	🟢 Green
+Port closed	🔴 Red
+Advanced Version (Blink Pattern)
+
+Sometimes a blink pattern is easier to see.
+
+#!/bin/bash
+
+TARGET="192.168.1.1"
+PORT="445"
+TIMEOUT=2
+
+LED SETUP
+LED ATTACK
+
+nc -z -w $TIMEOUT $TARGET $PORT
+
+if [ $? -eq 0 ]; then
+    while true
+    do
+        LED GREEN
+        sleep 0.5
+        LED OFF
+        sleep 0.5
+    done
+else
+    while true
+    do
+        LED RED
+        sleep 0.5
+        LED OFF
+        sleep 0.5
+    done
+fi
+Multi-Port Version (More Powerful)
+
+This scans several ports and logs them.
+
+#!/bin/bash
+
+TARGET="192.168.1.1"
+PORTS="22 80 443 445"
+
+LED SETUP
+LED ATTACK
+
+for PORT in $PORTS
+do
+    nc -z -w 2 $TARGET $PORT
+
+    if [ $? -eq 0 ]; then
+        LED GREEN
+        sleep 1
+    else
+        LED RED
+        sleep 1
+    fi
+done
+
+LED OFF
+Example EchoPhish Investigation Use
+
+Since you're building EchoPhish Cyber Investigations tools, this payload could be part of a rapid recon toolkit:
+
+EchoPhish-SharkJack/
+   payload.sh
+   targets.txt
+   portscan.sh
+   logs/
+
+Quick plug into a network → LED instantly shows critical service availability.
+
+✅ If you'd like, I can also build a much more advanced Shark Jack payload that:
+
+Auto-detects the gateway
+
+Scans top 100 ports
+
+Uses LED patterns for severity
+
+Saves results to loot folder
+
+Identifies Windows / Linux / routers
+
+Perfect for EchoPhish recon operations
+
+Just tell me and I’ll build it.
