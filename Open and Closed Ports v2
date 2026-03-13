@@ -1,0 +1,172 @@
+#!/bin/bash
+#
+# Title:         Port Tester
+# Description:   Tests if a specified port on a target host is open or closed.
+#                Blinks GREEN if open, RED if closed.
+# Author:        Your Name
+# Version:       1.0
+# Category:      Recon
+# Target:        Any network host
+#
+# LED States:
+#   Magenta (solid)     - Setting up
+#   Cyan (blinking)     - Scanning
+#   Green (blinking)    - Port is OPEN
+#   Red (blinking)      - Port is CLOSED
+#
+# Dependencies: nc (netcat) - pre-installed on Shark Jack
+#
+# Usage:
+#   Edit TARGET_HOST and TARGET_PORT below, or pass as arguments:
+#     ./payload.sh <host> <port>
+#
+# Example:
+#     ./payload.sh 192.168.1.1 80
+ 
+# ============================================================
+# CONFIGURATION — Edit these or pass as CLI arguments
+# ============================================================
+TARGET_HOST="${1:-192.168.1.1}"
+TARGET_PORT="${2:-80}"
+TIMEOUT=3           # seconds to wait for connection
+LOG_DIR="/root/loot/port-tester"
+LOG_FILE="$LOG_DIR/results.log"
+ 
+# ============================================================
+# SHARK JACK LED HELPERS
+# ============================================================
+ 
+# LED color constants
+LED_OFF="0 0 0"
+LED_RED="255 0 0"
+LED_GREEN="0 255 0"
+LED_BLUE="0 0 255"
+LED_CYAN="0 255 255"
+LED_MAGENTA="255 0 255"
+LED_YELLOW="255 255 0"
+LED_WHITE="255 255 255"
+ 
+# Set solid LED color: led_solid <R> <G> <B>
+led_solid() {
+    LED R $1 2>/dev/null
+    LED G $2 2>/dev/null
+    LED B $3 2>/dev/null
+}
+ 
+# Blink LED: led_blink <R> <G> <B> <count> <interval_seconds>
+led_blink() {
+    local r=$1 g=$2 b=$3
+    local count=${4:-5}
+    local interval=${5:-0.4}
+    for ((i=0; i<count; i++)); do
+        led_solid $r $g $b
+        sleep "$interval"
+        led_solid 0 0 0
+        sleep "$interval"
+    done
+}
+ 
+# Blink GREEN continuously in background (OPEN)
+blink_green_loop() {
+    while true; do
+        led_solid 0 255 0
+        sleep 0.4
+        led_solid 0 0 0
+        sleep 0.4
+    done
+}
+ 
+# Blink RED continuously in background (CLOSED)
+blink_red_loop() {
+    while true; do
+        led_solid 255 0 0
+        sleep 0.4
+        led_solid 0 0 0
+        sleep 0.4
+    done
+}
+ 
+# ============================================================
+# LOGGING
+# ============================================================
+ 
+log() {
+    local msg="$1"
+    echo "[$(date '+%Y-%m-%d %H:%M:%S')] $msg" | tee -a "$LOG_FILE"
+}
+ 
+setup_loot_dir() {
+    mkdir -p "$LOG_DIR"
+}
+ 
+# ============================================================
+# PORT TEST
+# ============================================================
+ 
+# Returns 0 if port open, 1 if closed/filtered
+test_port() {
+    local host="$1"
+    local port="$2"
+    local timeout="$3"
+ 
+    # Use nc (netcat) with zero-I/O mode for fast port check
+    nc -z -w "$timeout" "$host" "$port" 2>/dev/null
+    return $?
+}
+ 
+# ============================================================
+# MAIN
+# ============================================================
+ 
+main() {
+    # PHASE 1: Setup
+    led_solid 255 0 255   # Magenta = initializing
+    setup_loot_dir
+ 
+    log "========================================"
+    log "Shark Jack Port Tester v1.0"
+    log "Target : $TARGET_HOST"
+    log "Port   : $TARGET_PORT"
+    log "Timeout: ${TIMEOUT}s"
+    log "========================================"
+ 
+    # PHASE 2: Scanning
+    led_blink 0 255 255 2 0.3   # Cyan blink = scanning
+ 
+    log "Testing $TARGET_HOST:$TARGET_PORT ..."
+ 
+    if test_port "$TARGET_HOST" "$TARGET_PORT" "$TIMEOUT"; then
+        # PORT IS OPEN
+        STATUS="OPEN"
+        log "RESULT: Port $TARGET_PORT on $TARGET_HOST is OPEN"
+ 
+        # Blink green 10 times then hold
+        blink_green_loop &
+        BLINK_PID=$!
+        sleep 10
+        kill "$BLINK_PID" 2>/dev/null
+        led_solid 0 255 0   # Hold green
+    else
+        # PORT IS CLOSED / FILTERED
+        STATUS="CLOSED"
+        log "RESULT: Port $TARGET_PORT on $TARGET_HOST is CLOSED or FILTERED"
+ 
+        # Blink red 10 times then hold
+        blink_red_loop &
+        BLINK_PID=$!
+        sleep 10
+        kill "$BLINK_PID" 2>/dev/null
+        led_solid 255 0 0   # Hold red
+    fi
+ 
+    log "Scan complete. Status: $STATUS"
+    log "Results saved to: $LOG_FILE"
+ 
+    # Keep LED on for visibility, then off
+    sleep 5
+    led_solid 0 0 0
+ 
+    exit 0
+}
+ 
+main
